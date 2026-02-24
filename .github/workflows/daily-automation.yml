@@ -202,6 +202,7 @@ jobs:
           QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
           GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/google-vision-key.json
         run: |
           XHS_FILE="./scraper/${{ steps.verify.outputs.scraped_file }}"

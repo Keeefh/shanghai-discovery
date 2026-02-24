@@ -9,10 +9,13 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-// Initialize Google Vision client with explicit credentials from .env
-const visionClient = new vision.ImageAnnotatorClient({
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS
-});
+// Initialize Google Vision client — prefer credentials JSON directly (avoids
+// Windows path slash issues with keyFilename on self-hosted runners)
+const visionClient = new vision.ImageAnnotatorClient(
+  process.env.GOOGLE_CREDENTIALS_JSON
+    ? { credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON) }
+    : { keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS }
+);
 
 // Minimum text block size (percentage of image) — skip tiny text
 const MIN_WIDTH_PERCENT = 2;
