@@ -162,24 +162,13 @@ export function Feed() {
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  // Distribute posts across N columns in round-robin order.
-  // This gives a masonry-like layout without a JS masonry library.
-  // e.g. 4 posts into 2 cols: col0=[post0,post2], col1=[post1,post3]
-  const getColumns = (posts, numCols) => {
-    const columns = Array.from({ length: numCols }, () => [])
-    posts.forEach((post, index) => {
-      columns[index % numCols].push(post)
-    })
-    return columns
-  }
-
   const noResults = !initialLoading && posts.length === 0
 
   return (
     <div className="min-h-screen bg-stone-50">
       <FilterTabs activeTab={activeTab} onTabChange={handleTabChange} />
 
-      <main className="mx-auto max-w-6xl px-4 py-5">
+      <main className="mx-auto max-w-7xl px-4 py-5 md:px-6 lg:px-8">
         {/* Full-screen loading spinner on first load */}
         {initialLoading && <LoadingDots className="min-h-[60vh]" />}
 
@@ -198,81 +187,32 @@ export function Feed() {
           </div>
         )}
 
-        {/* Masonry grid — 3 separate flex layouts for responsive breakpoints.
-            We show/hide with Tailwind's responsive prefixes (md:, lg:) instead
-            of JS so there's zero layout shift when resizing. */}
+        {/* Single CSS grid with dense auto-flow: the browser fills incomplete rows
+            by pulling visual posts forward across Weibo interruptions automatically.
+            Works on both mobile (2-col) and desktop (3-col) without JS column math.
+            Text posts span all columns; blank cells only possible on the last row. */}
         {!initialLoading && posts.length > 0 && (
-          <>
-            {/* Mobile: 2 columns */}
-            <div className="flex gap-4 md:hidden">
-              {getColumns(posts, 2).map((column, colIndex) => (
-                <div key={colIndex} className="flex-1 min-w-0">
-                  {column.map((post) =>
-                    // VisualCard when the post has images; TextCard for text-only posts
-                    post.all_images?.length > 0 ? (
-                      <VisualCard
-                        key={post.id}
-                        post={post}
-                        onClick={() => setSelectedPost(post)}
-                      />
-                    ) : (
-                      <TextCard
-                        key={post.id}
-                        post={post}
-                        onClick={() => setSelectedPost(post)}
-                      />
-                    )
-                  )}
+          <div
+            className="grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-6 lg:gap-8"
+            style={{ gridAutoFlow: "row dense" }}
+          >
+            {posts.map((post) =>
+              post.all_images?.length > 0 ? (
+                <VisualCard
+                  key={post.id}
+                  post={post}
+                  onClick={() => setSelectedPost(post)}
+                />
+              ) : (
+                <div key={post.id} className="col-span-full">
+                  <TextCard
+                    post={post}
+                    onClick={() => setSelectedPost(post)}
+                  />
                 </div>
-              ))}
-            </div>
-
-            {/* Tablet: 3 columns */}
-            <div className="hidden gap-4 md:flex lg:hidden">
-              {getColumns(posts, 3).map((column, colIndex) => (
-                <div key={colIndex} className="flex-1 min-w-0">
-                  {column.map((post) =>
-                    post.all_images?.length > 0 ? (
-                      <VisualCard
-                        key={post.id}
-                        post={post}
-                        onClick={() => setSelectedPost(post)}
-                      />
-                    ) : (
-                      <TextCard
-                        key={post.id}
-                        post={post}
-                        onClick={() => setSelectedPost(post)}
-                      />
-                    )
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Desktop: 4 columns */}
-            <div className="hidden gap-4 lg:flex">
-              {getColumns(posts, 4).map((column, colIndex) => (
-                <div key={colIndex} className="flex-1 min-w-0">
-                  {column.map((post) =>
-                    post.all_images?.length > 0 ? (
-                      <VisualCard
-                        key={post.id}
-                        post={post}
-                        onClick={() => setSelectedPost(post)}
-                      />
-                    ) : (
-                      <TextCard
-                        key={post.id}
-                        post={post}
-                        onClick={() => setSelectedPost(post)}
-                      />
-                    )
-                  )}
-                </div>
-              ))}
-            </div>
-          </>
+              )
+            )}
+          </div>
         )}
 
         {/* Sentinel div — IntersectionObserver watches this to trigger loadMore.

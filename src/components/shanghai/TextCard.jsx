@@ -22,7 +22,7 @@ export function TextCard({ post, onClick }) {
   return (
     <article
       onClick={onClick}
-      className="group mb-4 cursor-pointer break-inside-avoid overflow-hidden rounded-lg bg-white p-4 shadow-sm transition-all duration-200 hover:shadow-md md:hover:-translate-y-0.5"
+      className="group cursor-pointer overflow-hidden rounded-lg bg-white p-4 shadow-sm transition-all duration-200 hover:shadow-md md:hover:-translate-y-0.5"
     >
       {/* Badge row: always show platform, conditionally show NEW */}
       <div className="mb-2 flex items-center gap-2">
@@ -41,16 +41,19 @@ export function TextCard({ post, onClick }) {
       </div>
 
       {/* Title — line-clamp-2 keeps card heights consistent */}
-      <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-stone-900">
+      <h3 className="line-clamp-2 text-base font-bold leading-snug text-stone-900">
         {post.Title}
       </h3>
 
       {/* English description — 3-line clamp to keep cards compact */}
       {post.description_en && (
-        <p className="mt-1.5 line-clamp-3 text-xs leading-relaxed text-stone-600">
+        <p className="mt-1.5 line-clamp-4 text-sm leading-relaxed text-stone-600">
           {post.description_en}
         </p>
       )}
+      <span className="mt-2 inline-block text-xs font-medium text-stone-400 group-hover:text-stone-600 transition-colors">
+        Read more →
+      </span>
 
       {/* Optional image — shown below text if the post has one */}
       {post.all_images?.length > 0 && (

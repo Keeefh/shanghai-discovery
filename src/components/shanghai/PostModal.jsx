@@ -112,17 +112,21 @@ export function PostModal({ post, onClose }) {
   // External link: XHS posts use xiaohongshu_url, Weibo posts use weibo_url
   const externalUrl = post.platform === "xiaohongshu" ? post.xiaohongshu_url : post.weibo_url
 
+  // Desktop: click outside closes. Mobile: swipe-down only (tap outside does nothing).
+  const isDesktop = () => window.matchMedia("(min-width: 768px)").matches
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center md:items-center"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose()
+        if (e.target === e.currentTarget && isDesktop()) onClose()
       }}
     >
-      {/* Backdrop — fades out as user drags modal down */}
+      {/* Backdrop — desktop: click closes; mobile: only fades on swipe-down drag */}
       <div
         className="absolute inset-0 bg-stone-900/60 backdrop-blur-sm transition-opacity duration-300"
         style={{ opacity: Math.max(0, 1 - translateY / 300) }}
+        onClick={() => { if (isDesktop()) onClose() }}
       />
 
       {/* Modal panel */}

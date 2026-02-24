@@ -27,7 +27,7 @@ export function VisualCard({ post, onClick }) {
   return (
     <article
       onClick={onClick}
-      className="group mb-4 cursor-pointer break-inside-avoid overflow-hidden rounded-lg bg-white shadow-sm transition-all duration-200 hover:shadow-md md:hover:-translate-y-0.5"
+      className="group cursor-pointer overflow-hidden rounded-lg bg-white shadow-sm transition-all duration-200 hover:shadow-md md:hover:-translate-y-0.5"
     >
       {/* Image area — only render if we actually have an image */}
       {coverImage && (

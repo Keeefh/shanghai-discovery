@@ -40,6 +40,7 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
         run: |
@@ -65,6 +66,14 @@ jobs:
             -H "Authorization: Bearer $OPENAI_API_KEY")
           if [ "$STATUS" = "200" ]; then echo "✓ OpenAI API key valid"
           else echo "✗ OpenAI API key invalid (HTTP $STATUS)"; FAILED=1; fi
+
+          # Qwen (used for image text editing)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation \
+            -H "Authorization: Bearer $QWEN_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"model":"qwen-turbo","input":{"messages":[{"role":"user","content":"hi"}]},"parameters":{"max_tokens":1}}')
+          if [ "$STATUS" = "200" ]; then echo "✓ Qwen API key valid"
+          else echo "✗ Qwen API key invalid (HTTP $STATUS) — image text editing will be skipped"; fi
 
           # ElevenLabs
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.us.elevenlabs.io/v1/user \
@@ -187,14 +196,18 @@ jobs:
       # Phase 0 only checked auth (key exists + HTTP 200). This step actually
       # calls each API to confirm it can do its job — catches permission issues,
       # disabled APIs, quota problems, etc. Runs after npm ci so @google-cloud/vision
-      # and @elevenlabs/elevenlabs-js are available. continue-on-error so a
-      # failing optional API doesn't block the whole pipeline.
+      # is available. continue-on-error so a failing optional API doesn't block
+      # the whole pipeline.
       - name: Validate API functionality
         continue-on-error: true
         env:
-          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
-          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           VITE_ANTHROPIC_API_KEY: ${{ secrets.VITE_ANTHROPIC_API_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
         run: |
           node --input-type=module --eval "
           import vision from '@google-cloud/vision'
@@ -202,23 +215,79 @@ jobs:
 
           let failed = 0
 
-          // ── Google Vision ──
-          if (process.env.GOOGLE_CREDENTIALS_JSON) {
+          // ── Anthropic ──
+          try {
+            const client = new Anthropic({ apiKey: process.env.VITE_ANTHROPIC_API_KEY })
+            const msg = await client.messages.create({
+              model: 'claude-haiku-4-5-20251001',
+              max_tokens: 1,
+              messages: [{ role: 'user', content: 'hi' }]
+            })
+            if (msg.id) console.log('✓ Anthropic API functional')
+            else { console.log('✗ Anthropic API returned no message id'); failed++ }
+          } catch (e) {
+            console.log('✗ Anthropic API failed:', e.message)
+            failed++
+          }
+
+          // ── Supabase ──
+          try {
+            const res = await fetch(process.env.VITE_SUPABASE_URL + '/rest/v1/Post?limit=1', {
+              headers: {
+                apikey: process.env.VITE_SUPABASE_ANON_KEY,
+                Authorization: 'Bearer ' + process.env.VITE_SUPABASE_ANON_KEY
+              }
+            })
+            if (res.ok) console.log('✓ Supabase API functional')
+            else { console.log('✗ Supabase API failed: HTTP', res.status); failed++ }
+          } catch (e) {
+            console.log('✗ Supabase API failed:', e.message)
+            failed++
+          }
+
+          // ── OpenAI ──
+          try {
+            const res = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                Authorization: 'Bearer ' + process.env.OPENAI_API_KEY,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                max_tokens: 1,
+                messages: [{ role: 'user', content: 'hi' }]
+              })
+            })
+            if (res.ok) console.log('✓ OpenAI API functional')
+            else { console.log('✗ OpenAI API failed: HTTP', res.status); failed++ }
+          } catch (e) {
+            console.log('✗ OpenAI API failed:', e.message)
+            failed++
+          }
+
+          // ── Qwen ──
+          if (process.env.QWEN_API_KEY) {
             try {
-              const client = new vision.ImageAnnotatorClient({
-                credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON)
+              const res = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation', {
+                method: 'POST',
+                headers: {
+                  Authorization: 'Bearer ' + process.env.QWEN_API_KEY,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  model: 'qwen-turbo',
+                  input: { messages: [{ role: 'user', content: 'hi' }] },
+                  parameters: { max_tokens: 1 }
+                })
               })
-              // Minimal 1x1 GIF — just enough to trigger a real API call
-              const [result] = await client.labelDetection({
-                image: { content: Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64') }
-              })
-              console.log('✓ Google Vision API functional')
+              if (res.ok) console.log('✓ Qwen API functional')
+              else { console.log('✗ Qwen API failed: HTTP', res.status) }
             } catch (e) {
-              console.log('✗ Google Vision API failed:', e.message)
-              failed++
+              console.log('✗ Qwen API failed:', e.message)
             }
           } else {
-            console.log('⚠  Google Vision skipped — no credentials')
+            console.log('⚠  Qwen skipped — no API key')
           }
 
           // ── ElevenLabs ──
@@ -228,15 +297,38 @@ jobs:
                 headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY }
               })
               if (res.ok) console.log('✓ ElevenLabs API functional')
-              else { console.log('✗ ElevenLabs API failed: HTTP', res.status); failed++ }
+              else { console.log('✗ ElevenLabs API failed: HTTP', res.status) }
             } catch (e) {
               console.log('✗ ElevenLabs API failed:', e.message)
             }
+          } else {
+            console.log('⚠  ElevenLabs skipped — no API key')
+          }
+
+          // ── Google Vision ──
+          if (process.env.GOOGLE_CREDENTIALS_JSON) {
+            try {
+              const client = new vision.ImageAnnotatorClient({
+                credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON)
+              })
+              // Minimal 1x1 GIF — just enough to trigger a real API call
+              await client.labelDetection({
+                image: { content: Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64') }
+              })
+              console.log('✓ Google Vision API functional')
+            } catch (e) {
+              console.log('✗ Google Vision API failed:', e.message)
+            }
+          } else {
+            console.log('⚠  Google Vision skipped — no credentials')
           }
 
           if (failed > 0) {
             console.log('')
-            console.log(failed + ' API(s) failed functional test — pipeline will skip those features')
+            console.log(failed + ' critical API(s) failed — pipeline may produce incomplete results')
+          } else {
+            console.log('')
+            console.log('All critical APIs functional ✓')
           }
           "
 
