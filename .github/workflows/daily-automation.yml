@@ -183,6 +183,63 @@ jobs:
       - name: Install Node.js dependencies
         run: npm ci
 
+      # ── Functional API tests ──────────────────────────────────────────────
+      # Phase 0 only checked auth (key exists + HTTP 200). This step actually
+      # calls each API to confirm it can do its job — catches permission issues,
+      # disabled APIs, quota problems, etc. Runs after npm ci so @google-cloud/vision
+      # and @elevenlabs/elevenlabs-js are available. continue-on-error so a
+      # failing optional API doesn't block the whole pipeline.
+      - name: Validate API functionality
+        continue-on-error: true
+        env:
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          VITE_ANTHROPIC_API_KEY: ${{ secrets.VITE_ANTHROPIC_API_KEY }}
+        run: |
+          node --input-type=module --eval "
+          import vision from '@google-cloud/vision'
+          import Anthropic from '@anthropic-ai/sdk'
+
+          let failed = 0
+
+          // ── Google Vision ──
+          if (process.env.GOOGLE_CREDENTIALS_JSON) {
+            try {
+              const client = new vision.ImageAnnotatorClient({
+                credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON)
+              })
+              // Minimal 1x1 GIF — just enough to trigger a real API call
+              const [result] = await client.labelDetection({
+                image: { content: Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64') }
+              })
+              console.log('✓ Google Vision API functional')
+            } catch (e) {
+              console.log('✗ Google Vision API failed:', e.message)
+              failed++
+            }
+          } else {
+            console.log('⚠  Google Vision skipped — no credentials')
+          }
+
+          // ── ElevenLabs ──
+          if (process.env.ELEVENLABS_API_KEY) {
+            try {
+              const res = await fetch('https://api.us.elevenlabs.io/v1/voices', {
+                headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY }
+              })
+              if (res.ok) console.log('✓ ElevenLabs API functional')
+              else { console.log('✗ ElevenLabs API failed: HTTP', res.status); failed++ }
+            } catch (e) {
+              console.log('✗ ElevenLabs API failed:', e.message)
+            }
+          }
+
+          if (failed > 0) {
+            console.log('')
+            console.log(failed + ' API(s) failed functional test — pipeline will skip those features')
+          }
+          "
+
       # CPU-only torch to avoid the 2 GB CUDA download
       - name: Install audio processing dependencies
         working-directory: scraper
