@@ -48,7 +48,10 @@ export async function editImageWithQwen(imagePath, overlays, outputPath) {
     instructions += 'CRITICAL: You must REMOVE the original Chinese text completely and replace it with English. Do NOT keep both languages.\n\n';
 
     overlays.forEach((overlay, i) => {
-      instructions += `${i + 1}. REMOVE "${overlay.chinese}" and REPLACE with "${overlay.english}" (${overlay.location})\n`;
+      const pos = overlay.position
+        ? `${Math.round(overlay.position.x_percent)}% from left, ${Math.round(overlay.position.y_percent)}% from top`
+        : 'center';
+      instructions += `${i + 1}. REMOVE "${overlay.chinese}" and REPLACE with "${overlay.english}" (${pos})\n`;
     });
 
     instructions += `\nIMPORTANT RULES:

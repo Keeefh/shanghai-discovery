@@ -177,6 +177,7 @@ jobs:
                 method: 'POST',
                 headers: {
                   Authorization: 'Bearer ' + process.env.VITE_SUPABASE_ANON_KEY,
+                  apikey: process.env.VITE_SUPABASE_ANON_KEY,
                   'Content-Type': 'text/plain',
                   'x-upsert': 'true'
                 },
@@ -393,6 +394,7 @@ jobs:
       - name: Process posts with Claude API
         env:
           VITE_ANTHROPIC_API_KEY: ${{ secrets.VITE_ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.VITE_ANTHROPIC_API_KEY }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
