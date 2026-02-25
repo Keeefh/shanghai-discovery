@@ -175,7 +175,7 @@ jobs:
             const { createClient } = await import('@supabase/supabase-js')
             const sb = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY)
             const testKey = 'pipeline-test-' + Date.now() + '.txt'
-            const { error: upErr } = await sb.storage.from('post-images').upload(testKey, 'test', { upsert: true })
+            const { error: upErr } = await sb.storage.from('post-images').upload(testKey, 'test', { upsert: false, contentType: 'text/plain' })
             if (!upErr) {
               sb.storage.from('post-images').remove([testKey]).catch(() => {})
               console.log('✓ Supabase storage upload functional')
