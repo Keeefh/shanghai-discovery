@@ -20,9 +20,9 @@ jobs:
         run: echo C:\Program Files\Git\bin>> %GITHUB_PATH%
 
       # ══════════════════════════════════════════════════════════════
-      # PHASE 1 — Minimum setup needed to run the scraper
-      # Goal: get to scraping as fast as possible so a bad cookie
-      # fails in ~2 minutes instead of ~12.
+      # PHASE 1 — Checkout + credential + API validation
+      # All checks run before scraping so the job fails fast on bad
+      # keys/cookies without wasting time on heavy installs.
       # ══════════════════════════════════════════════════════════════
 
       - name: Checkout repository
@@ -100,87 +100,10 @@ jobs:
             exit 1
           fi
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-          cache: 'pip'
-          cache-dependency-path: scraper/requirements.txt
-
-      # Install only the scraper's own dependencies (no torch, no demucs yet)
-      - name: Install scraper dependencies
-        working-directory: scraper
-        run: pip install -r requirements.txt
-
-      # Download the Chromium browser binary — required for Playwright scraping
-      - name: Install Playwright browser
-        run: playwright install --with-deps chromium
-
       # ══════════════════════════════════════════════════════════════
-      # PHASE 2 — Scrape (fail fast if cookies are bad)
-      # If XHS cookies are stale the job dies here, saving all the
-      # torch / npm install time below.
-      # ══════════════════════════════════════════════════════════════
-
-      - name: Run XHS scraper
-        id: scrape
-        working-directory: scraper
-        continue-on-error: true
-        env:
-          COOKIES: ${{ secrets.XHS_COOKIES }}
-        run: |
-          echo "Starting XHS scraper..."
-          python main.py --platform xhs --lt cookie --type search
-          echo "XHS scraping done"
-        timeout-minutes: 30
-
-      - name: Run Weibo scraper
-        id: scrape-weibo
-        working-directory: scraper
-        continue-on-error: true
-        env:
-          COOKIES: ${{ secrets.WEIBO_COOKIES }}
-          CRAWLER_MAX_NOTES_COUNT: "80"
-        run: |
-          echo "Starting Weibo scraper..."
-          python main.py --platform wb --lt cookie --type search
-          echo "Weibo scraping done"
-        timeout-minutes: 20
-
-      - name: Verify Weibo data
-        id: verify-weibo
-        working-directory: scraper
-        continue-on-error: true
-        run: |
-          LATEST=$(ls -t data/weibo/json/search_contents_*.json 2>/dev/null | head -n 1)
-          if [ -z "$LATEST" ]; then
-            echo "No Weibo data — XHS-only run"
-            echo "weibo_file=" >> $GITHUB_OUTPUT
-          else
-            COUNT=$(node -pe "require('./$LATEST').length")
-            echo "Found $COUNT Weibo posts in $LATEST"
-            echo "weibo_file=$LATEST" >> $GITHUB_OUTPUT
-          fi
-
-      # Hard stop here if XHS scraping produced nothing
-      - name: Verify XHS scraped data
-        id: verify
-        working-directory: scraper
-        run: |
-          LATEST_FILE=$(ls -t data/xhs/json/search_contents_*.json 2>/dev/null | head -n 1)
-          if [ -z "$LATEST_FILE" ]; then
-            echo "No XHS data found — cookies are likely expired. Update XHS_COOKIES secret and re-run."
-            exit 1
-          fi
-          POST_COUNT=$(node -pe "require('./$LATEST_FILE').length")
-          echo "Found $POST_COUNT posts in $LATEST_FILE"
-          echo "scraped_file=$LATEST_FILE" >> $GITHUB_OUTPUT
-          echo "post_count=$POST_COUNT" >> $GITHUB_OUTPUT
-
-      # ══════════════════════════════════════════════════════════════
-      # PHASE 3 — Install processing dependencies
-      # Only reached if scraping succeeded, so this time is never
-      # wasted on a bad-cookie run.
+      # PHASE 0.5 — Validate API functionality (needs npm packages)
+      # Runs before scraping so the pipeline fails fast if any API
+      # is broken, without spending time on scraping first.
       # ══════════════════════════════════════════════════════════════
 
       - name: Setup Node.js
@@ -192,12 +115,9 @@ jobs:
       - name: Install Node.js dependencies
         run: npm ci
 
-      # ── Functional API tests ──────────────────────────────────────────────
-      # Phase 0 only checked auth (key exists + HTTP 200). This step actually
-      # calls each API to confirm it can do its job — catches permission issues,
-      # disabled APIs, quota problems, etc. Runs after npm ci so @google-cloud/vision
-      # is available. continue-on-error so a failing optional API doesn't block
-      # the whole pipeline.
+      # Calls each API to confirm it can do its job — catches permission issues,
+      # disabled APIs, quota problems, etc. continue-on-error so a failing
+      # optional API doesn't block the whole pipeline.
       - name: Validate API functionality
         continue-on-error: true
         env:
@@ -373,6 +293,91 @@ jobs:
             console.log('All critical APIs functional ✓')
           }
           "
+
+      # ══════════════════════════════════════════════════════════════
+      # PHASE 1 — Setup Python scraper dependencies
+      # ══════════════════════════════════════════════════════════════
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: scraper/requirements.txt
+
+      # Install only the scraper's own dependencies (no torch, no demucs yet)
+      - name: Install scraper dependencies
+        working-directory: scraper
+        run: pip install -r requirements.txt
+
+      # Download the Chromium browser binary — required for Playwright scraping
+      - name: Install Playwright browser
+        run: playwright install --with-deps chromium
+
+      # ══════════════════════════════════════════════════════════════
+      # PHASE 2 — Scrape (fail fast if cookies are bad)
+      # If XHS cookies are stale the job dies here, saving all the
+      # torch / demucs install time below.
+      # ══════════════════════════════════════════════════════════════
+
+      - name: Run XHS scraper
+        id: scrape
+        working-directory: scraper
+        continue-on-error: true
+        env:
+          COOKIES: ${{ secrets.XHS_COOKIES }}
+        run: |
+          echo "Starting XHS scraper..."
+          python main.py --platform xhs --lt cookie --type search
+          echo "XHS scraping done"
+        timeout-minutes: 30
+
+      - name: Run Weibo scraper
+        id: scrape-weibo
+        working-directory: scraper
+        continue-on-error: true
+        env:
+          COOKIES: ${{ secrets.WEIBO_COOKIES }}
+          CRAWLER_MAX_NOTES_COUNT: "80"
+        run: |
+          echo "Starting Weibo scraper..."
+          python main.py --platform wb --lt cookie --type search
+          echo "Weibo scraping done"
+        timeout-minutes: 20
+
+      - name: Verify Weibo data
+        id: verify-weibo
+        working-directory: scraper
+        continue-on-error: true
+        run: |
+          LATEST=$(ls -t data/weibo/json/search_contents_*.json 2>/dev/null | head -n 1)
+          if [ -z "$LATEST" ]; then
+            echo "No Weibo data — XHS-only run"
+            echo "weibo_file=" >> $GITHUB_OUTPUT
+          else
+            COUNT=$(node -pe "require('./$LATEST').length")
+            echo "Found $COUNT Weibo posts in $LATEST"
+            echo "weibo_file=$LATEST" >> $GITHUB_OUTPUT
+          fi
+
+      # Hard stop here if XHS scraping produced nothing
+      - name: Verify XHS scraped data
+        id: verify
+        working-directory: scraper
+        run: |
+          LATEST_FILE=$(ls -t data/xhs/json/search_contents_*.json 2>/dev/null | head -n 1)
+          if [ -z "$LATEST_FILE" ]; then
+            echo "No XHS data found — cookies are likely expired. Update XHS_COOKIES secret and re-run."
+            exit 1
+          fi
+          POST_COUNT=$(node -pe "require('./$LATEST_FILE').length")
+          echo "Found $POST_COUNT posts in $LATEST_FILE"
+          echo "scraped_file=$LATEST_FILE" >> $GITHUB_OUTPUT
+          echo "post_count=$POST_COUNT" >> $GITHUB_OUTPUT
+
+      # ══════════════════════════════════════════════════════════════
+      # PHASE 3 — Install audio processing dependencies
+      # ══════════════════════════════════════════════════════════════
 
       # CPU-only torch to avoid the 2 GB CUDA download
       - name: Install audio processing dependencies
