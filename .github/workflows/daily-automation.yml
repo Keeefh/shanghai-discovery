@@ -77,7 +77,7 @@ jobs:
 
           # ElevenLabs — optional
           ELKEY=$(echo -n "$ELEVENLABS_API_KEY" | tr -d '[:space:]')
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.elevenlabs.io/v1/user \
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.elevenlabs.io/v1/voices \
             -H "xi-api-key: $ELKEY" \
             -H "Authorization: Bearer $ELKEY") || STATUS="000"
           if [ "$STATUS" = "200" ]; then echo "✓ ElevenLabs API key valid"
