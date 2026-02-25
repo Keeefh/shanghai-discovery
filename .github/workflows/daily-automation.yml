@@ -76,7 +76,7 @@ jobs:
           else echo "✗ Qwen API key invalid or unreachable (HTTP $STATUS) — image text editing will be skipped"; fi
 
           # ElevenLabs — optional
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.us.elevenlabs.io/v1/user \
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.elevenlabs.io/v1/user \
             -H "xi-api-key: $ELEVENLABS_API_KEY") || STATUS="000"
           if [ "$STATUS" = "200" ]; then echo "✓ ElevenLabs API key valid"
           else echo "✗ ElevenLabs API key invalid or unreachable (HTTP $STATUS) — video dubbing will be skipped"; fi
@@ -251,7 +251,7 @@ jobs:
           // ── ElevenLabs ──
           if (process.env.ELEVENLABS_API_KEY) {
             try {
-              const res = await fetch('https://api.us.elevenlabs.io/v1/voices', {
+              const res = await fetch('https://api.elevenlabs.io/v1/voices', {
                 headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY }
               })
               if (res.ok) console.log('✓ ElevenLabs API functional')
