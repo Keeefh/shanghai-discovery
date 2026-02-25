@@ -170,36 +170,17 @@ jobs:
             failed++
           }
 
-          // ── Supabase storage (mirrors real upload path used for images + videos) ──
+          // ── Supabase storage — use SDK same as real pipeline ──
           try {
+            const { createClient } = await import('@supabase/supabase-js')
+            const sb = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY)
             const testKey = 'pipeline-test-' + Date.now() + '.txt'
-            const uploadRes = await fetch(
-              process.env.VITE_SUPABASE_URL + '/storage/v1/object/post-images/' + testKey,
-              {
-                method: 'POST',
-                headers: {
-                  Authorization: 'Bearer ' + process.env.VITE_SUPABASE_ANON_KEY,
-                  apikey: process.env.VITE_SUPABASE_ANON_KEY,
-                  'Content-Type': 'text/plain',
-                  'x-upsert': 'true'
-                },
-                body: 'test'
-              }
-            )
-            if (uploadRes.ok) {
-              // cleanup — best effort
-              fetch(process.env.VITE_SUPABASE_URL + '/storage/v1/object/post-images', {
-                method: 'DELETE',
-                headers: {
-                  Authorization: 'Bearer ' + process.env.VITE_SUPABASE_ANON_KEY,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ prefixes: [testKey] })
-              }).catch(() => {})
+            const { error: upErr } = await sb.storage.from('post-images').upload(testKey, 'test', { upsert: true })
+            if (!upErr) {
+              sb.storage.from('post-images').remove([testKey]).catch(() => {})
               console.log('✓ Supabase storage upload functional')
             } else {
-              const body = await uploadRes.text()
-              console.log('✗ Supabase storage upload failed: HTTP', uploadRes.status, '-', body.slice(0, 120))
+              console.log('✗ Supabase storage upload failed:', upErr.message)
             }
           } catch (e) {
             console.log('✗ Supabase storage upload failed:', e.message)
@@ -250,18 +231,16 @@ jobs:
             console.log('⚠  Qwen skipped — no API key')
           }
 
-          // ── ElevenLabs ──
+          // ── ElevenLabs — use SDK same as real pipeline ──
           if (process.env.ELEVENLABS_API_KEY) {
             try {
-              const elKey = (process.env.ELEVENLABS_API_KEY || '').trim()
-              const res = await fetch('https://api.elevenlabs.io/v1/voices', {
-                headers: {
-                  'xi-api-key': elKey,
-                  'Authorization': 'Bearer ' + elKey
-                }
+              const { ElevenLabsClient } = await import('@elevenlabs/elevenlabs-js')
+              const elClient = new ElevenLabsClient({
+                apiKey: process.env.ELEVENLABS_API_KEY.trim(),
+                baseUrl: 'https://api.elevenlabs.io'
               })
-              if (res.ok) console.log('✓ ElevenLabs API functional')
-              else { console.log('✗ ElevenLabs API failed: HTTP', res.status) }
+              await elClient.voices.getAll()
+              console.log('✓ ElevenLabs API functional')
             } catch (e) {
               console.log('✗ ElevenLabs API failed:', e.message)
             }
