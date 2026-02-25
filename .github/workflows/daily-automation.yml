@@ -212,6 +212,9 @@ jobs:
           node --input-type=module --eval "
           import vision from '@google-cloud/vision'
           import Anthropic from '@anthropic-ai/sdk'
+          import { writeFileSync, unlinkSync } from 'fs'
+          import { tmpdir } from 'os'
+          import { join } from 'path'
 
           let failed = 0
 
@@ -230,7 +233,7 @@ jobs:
             failed++
           }
 
-          // ── Supabase ──
+          // ── Supabase DB ──
           try {
             const res = await fetch(process.env.VITE_SUPABASE_URL + '/rest/v1/Post?limit=1', {
               headers: {
@@ -238,11 +241,45 @@ jobs:
                 Authorization: 'Bearer ' + process.env.VITE_SUPABASE_ANON_KEY
               }
             })
-            if (res.ok) console.log('✓ Supabase API functional')
-            else { console.log('✗ Supabase API failed: HTTP', res.status); failed++ }
+            if (res.ok) console.log('✓ Supabase DB functional')
+            else { console.log('✗ Supabase DB failed: HTTP', res.status); failed++ }
           } catch (e) {
-            console.log('✗ Supabase API failed:', e.message)
+            console.log('✗ Supabase DB failed:', e.message)
             failed++
+          }
+
+          // ── Supabase storage (mirrors real upload path used for images + videos) ──
+          try {
+            const testKey = 'pipeline-test-' + Date.now() + '.txt'
+            const uploadRes = await fetch(
+              process.env.VITE_SUPABASE_URL + '/storage/v1/object/post-images/' + testKey,
+              {
+                method: 'POST',
+                headers: {
+                  Authorization: 'Bearer ' + process.env.VITE_SUPABASE_ANON_KEY,
+                  'Content-Type': 'text/plain',
+                  'x-upsert': 'true'
+                },
+                body: 'test'
+              }
+            )
+            if (uploadRes.ok) {
+              // cleanup — best effort
+              fetch(process.env.VITE_SUPABASE_URL + '/storage/v1/object/post-images', {
+                method: 'DELETE',
+                headers: {
+                  Authorization: 'Bearer ' + process.env.VITE_SUPABASE_ANON_KEY,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ prefixes: [testKey] })
+              }).catch(() => {})
+              console.log('✓ Supabase storage upload functional')
+            } else {
+              const body = await uploadRes.text()
+              console.log('✗ Supabase storage upload failed: HTTP', uploadRes.status, '-', body.slice(0, 120))
+            }
+          } catch (e) {
+            console.log('✗ Supabase storage upload failed:', e.message)
           }
 
           // ── OpenAI ──
@@ -306,16 +343,21 @@ jobs:
           }
 
           // ── Google Vision ──
+          // Uses documentTextDetection with a temp file on disk — same code path as real usage
+          // (real usage: analyze-with-google-vision.mjs calls documentTextDetection(localFilePath))
           if (process.env.GOOGLE_CREDENTIALS_JSON) {
             try {
               const client = new vision.ImageAnnotatorClient({
                 credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON)
               })
-              // Minimal 1x1 GIF — just enough to trigger a real API call
-              await client.labelDetection({
-                image: { content: Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64') }
-              })
-              console.log('✓ Google Vision API functional')
+              const testImg = join(tmpdir(), 'vision-test-' + process.pid + '.png')
+              writeFileSync(testImg, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'))
+              try {
+                await client.documentTextDetection(testImg)
+                console.log('✓ Google Vision API functional')
+              } finally {
+                try { unlinkSync(testImg) } catch (_) {}
+              }
             } catch (e) {
               console.log('✗ Google Vision API failed:', e.message)
             }
