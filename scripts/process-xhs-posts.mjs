@@ -289,13 +289,21 @@ async function uploadAllImagesToSupabase(noteId, scraperImagesDir) {
       const imgLabel = `img${i + 1}/${imageFiles.length}`
 
       // STEP A: Google Vision OCR + Haiku filter/translate (always, for every image)
-      // Wrapped in its own try/catch so one Vision failure doesn't kill all images
+      // Retries up to 3 times on transient failures (e.g. 529 overloaded)
       let textAnalysis = { overlays: [] }
-      try {
-        textAnalysis = await analyzeImageWithGoogle(localImagePath)
-      } catch (visionErr) {
-        errors.push(`google_vision[${imgLabel}]: ${visionErr.message}`)
-        console.warn(`  ⚠️  Google Vision failed for ${imgLabel}: ${visionErr.message} — skipping text overlay`)
+      for (let visionAttempt = 1; visionAttempt <= 3; visionAttempt++) {
+        try {
+          textAnalysis = await analyzeImageWithGoogle(localImagePath)
+          break
+        } catch (visionErr) {
+          if (visionAttempt < 3) {
+            console.warn(`  ⚠️  Vision attempt ${visionAttempt} failed (${visionErr.message}) — retrying...`)
+            await new Promise(r => setTimeout(r, 2000 * visionAttempt))
+          } else {
+            errors.push(`google_vision[${imgLabel}]: ${visionErr.message}`)
+            console.warn(`  ⚠️  Google Vision failed after 3 attempts for ${imgLabel} — skipping text overlay`)
+          }
+        }
       }
       const overlayCount = textAnalysis.overlays ? textAnalysis.overlays.length : 0
 
@@ -307,42 +315,39 @@ async function uploadAllImagesToSupabase(noteId, scraperImagesDir) {
         finalImagePath = await overlayTranslatedText(localImagePath, textAnalysis.overlays, overlayPath)
 
       } else if (overlayCount > 0) {
-        // Few overlays: Qwen aesthetic edit + Haiku validation
+        // Few overlays: Qwen aesthetic edit + validation (up to 3 attempts with backoff)
         console.log(`  🎨 Image ${i + 1}/${imageFiles.length}: Qwen edit (${overlayCount} overlay(s))`)
         const editedPath = path.join(imageFolderPath, `edited-${imageFile}`)
 
-        // First attempt
-        let translatedPath = await editImageWithQwen(localImagePath, textAnalysis.overlays, editedPath)
+        let translatedPath = localImagePath
+        let qwenSuccess = false
 
-        // Only validate if Qwen actually produced a new file (not the original)
-        if (translatedPath !== localImagePath && fs.existsSync(translatedPath)) {
-          const validation = await validateImageTranslation(translatedPath, textAnalysis.overlays)
-
-          if (!validation.success) {
-            console.log(`  🔄 Retrying Qwen with enhanced instructions...`)
-            const retryPath = path.join(imageFolderPath, `retry-${imageFile}`)
-            translatedPath = await editImageWithQwen(localImagePath, textAnalysis.overlays, retryPath)
-
-            if (translatedPath !== localImagePath && fs.existsSync(translatedPath)) {
-              const retryValidation = await validateImageTranslation(translatedPath, textAnalysis.overlays)
-              if (!retryValidation.success) {
-                console.log(`  ⚠️  Qwen retry failed validation - falling back to simple overlay`)
-                errors.push(`qwen_edit[${imgLabel}]: retry failed validation — fell back to simple overlay`)
-                const fallbackPath = path.join(imageFolderPath, `overlay-${imageFile}`)
-                translatedPath = await overlayTranslatedText(localImagePath, textAnalysis.overlays, fallbackPath)
+        for (let qwenAttempt = 1; qwenAttempt <= 3; qwenAttempt++) {
+          try {
+            const resultPath = await editImageWithQwen(localImagePath, textAnalysis.overlays, editedPath)
+            if (resultPath !== localImagePath && fs.existsSync(resultPath)) {
+              const validation = await validateImageTranslation(resultPath, textAnalysis.overlays)
+              if (validation.success) {
+                translatedPath = resultPath
+                qwenSuccess = true
+                break
+              } else {
+                console.warn(`  ⚠️  Qwen attempt ${qwenAttempt} failed validation — retrying...`)
               }
             } else {
-              // Qwen retry also failed to produce file
-              console.log(`  ⚠️  Qwen retry failed - falling back to simple overlay`)
-              errors.push(`qwen_edit[${imgLabel}]: retry produced no file — fell back to simple overlay`)
-              const fallbackPath = path.join(imageFolderPath, `overlay-${imageFile}`)
-              translatedPath = await overlayTranslatedText(localImagePath, textAnalysis.overlays, fallbackPath)
+              console.warn(`  ⚠️  Qwen attempt ${qwenAttempt} produced no file — retrying...`)
             }
+          } catch (qwenErr) {
+            console.warn(`  ⚠️  Qwen attempt ${qwenAttempt} failed (${qwenErr.message}) — retrying...`)
           }
-        } else {
-          // Qwen failed entirely - fall back to simple overlay
-          console.log(`  ⚠️  Qwen failed - falling back to simple overlay`)
-          errors.push(`qwen_edit[${imgLabel}]: failed to produce file — fell back to simple overlay`)
+          if (qwenAttempt < 3) {
+            await new Promise(r => setTimeout(r, 2000 * qwenAttempt))
+          }
+        }
+
+        if (!qwenSuccess) {
+          console.log(`  ⚠️  Qwen failed after 3 attempts — falling back to simple overlay`)
+          errors.push(`qwen_edit[${imgLabel}]: failed after 3 attempts — fell back to simple overlay`)
           const fallbackPath = path.join(imageFolderPath, `overlay-${imageFile}`)
           translatedPath = await overlayTranslatedText(localImagePath, textAnalysis.overlays, fallbackPath)
         }
@@ -352,31 +357,41 @@ async function uploadAllImagesToSupabase(noteId, scraperImagesDir) {
         console.log(`  → Image ${i + 1}/${imageFiles.length}: No text overlays, using original`)
       }
 
-      // STEP C: Upload final image (edited or original) to Supabase
+      // STEP C: Upload final image (edited or original) to Supabase (up to 3 attempts)
       const buffer = fs.readFileSync(finalImagePath)
-
-      // Generate unique filename with index to preserve order
       const fileExt = path.extname(imageFile).slice(1) || 'jpg'
-      const fileName = `${noteId}-${i}-${Date.now()}.${fileExt}`
 
-      // Upload to Supabase Storage
-      const { data, error } = await supabase.storage
-        .from('post-images')
-        .upload(fileName, buffer, {
-          contentType: `image/${fileExt}`,
-          upsert: false
-        })
+      let uploadError = null
+      let publicUrl = null
 
-      if (error) {
-        errors.push(`supabase_storage[${imgLabel}]: ${error.message}`)
-        console.warn(`  ⚠️  Failed to upload image ${i + 1}/${imageFiles.length}: ${error.message}`)
-        continue  // Skip this image but continue with others
+      for (let uploadAttempt = 1; uploadAttempt <= 3; uploadAttempt++) {
+        // New filename each attempt so a partial first attempt doesn't block retry
+        const fileName = `${noteId}-${i}-${Date.now()}.${fileExt}`
+        const { error } = await supabase.storage
+          .from('post-images')
+          .upload(fileName, buffer, {
+            contentType: `image/${fileExt}`,
+            upsert: false
+          })
+        uploadError = error
+        if (!uploadError) {
+          const { data: { publicUrl: url } } = supabase.storage
+            .from('post-images')
+            .getPublicUrl(fileName)
+          publicUrl = url
+          break
+        }
+        if (uploadAttempt < 3) {
+          console.warn(`  ⚠️  Upload attempt ${uploadAttempt} failed (${uploadError.message}) — retrying...`)
+          await new Promise(r => setTimeout(r, 2000 * uploadAttempt))
+        }
       }
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('post-images')
-        .getPublicUrl(fileName)
+      if (uploadError) {
+        errors.push(`supabase_storage[${imgLabel}]: ${uploadError.message}`)
+        console.warn(`  ⚠️  Failed to upload image ${i + 1}/${imageFiles.length}: ${uploadError.message}`)
+        continue  // Skip this image but continue with others
+      }
 
       uploadedUrls.push(publicUrl)
     }
