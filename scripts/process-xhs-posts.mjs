@@ -406,7 +406,7 @@ function normalizePost(post, platform) {
     time: (post.create_time || 0) * 1000,   // seconds → milliseconds
     comment_count: post.comments_count || '0',
     share_count: post.shared_count || '0',
-    image_list: '',     // Weibo store doesn't capture image URLs
+    image_list: post.image_list || '',  // Weibo CDN URLs from scraper (Sina CDN, stable)
     video_url: null,
     tag_list: '',
   }
@@ -611,13 +611,17 @@ async function main() {
           record = buildSupabaseRecord(post, filterResult, translation, [], dubbedVideoUrl, postErrors)
 
         } else {
-          // ── IMAGE / TEXT (or Weibo — text only, no media download) ────────
+          // ── IMAGE / TEXT ──────────────────────────────────────────────────
           let hostedImageUrls = []
           const images = post.image_list ? post.image_list.split(',').filter(Boolean) : []
-          if (images.length > 0 && post._platform !== 'weibo') {
-            const { urls, errors: imgErrors } = await uploadAllImagesToSupabase(post.note_id, post._scraperImagesDir)
-            hostedImageUrls = urls
-            postErrors.push(...imgErrors)
+          if (images.length > 0) {
+            if (post._platform === 'weibo') {
+              hostedImageUrls = images  // Sina CDN URLs are stable — use directly
+            } else {
+              const { urls, errors: imgErrors } = await uploadAllImagesToSupabase(post.note_id, post._scraperImagesDir)
+              hostedImageUrls = urls
+              postErrors.push(...imgErrors)
+            }
           }
           record = buildSupabaseRecord(post, filterResult, translation, hostedImageUrls, null, postErrors)
         }

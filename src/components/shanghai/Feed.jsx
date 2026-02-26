@@ -197,7 +197,7 @@ export function Feed() {
             style={{ gridAutoFlow: "row dense" }}
           >
             {posts.map((post) =>
-              post.all_images?.length > 0 ? (
+              post.all_images?.length > 0 && post.platform !== 'weibo' ? (
                 <VisualCard
                   key={post.id}
                   post={post}

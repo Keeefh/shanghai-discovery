@@ -82,6 +82,13 @@ async def update_weibo_note(note_item: Dict):
     note_id = mblog.get("id")
     content_text = mblog.get("text")
     clean_text = re.sub(r"<.*?>", "", content_text)
+    pics = mblog.get("pics") or []
+    image_urls = []
+    for pic in pics:
+        if isinstance(pic, str):
+            image_urls.append(pic)
+        elif isinstance(pic, dict) and pic.get("url"):
+            image_urls.append(pic["url"])
     save_content_item = {
         # 微博信息
         "note_id": note_id,
@@ -94,6 +101,7 @@ async def update_weibo_note(note_item: Dict):
         "last_modify_ts": utils.get_current_timestamp(),
         "note_url": f"https://m.weibo.cn/detail/{note_id}",
         "ip_location": mblog.get("region_name", "").replace("发布于 ", ""),
+        "image_list": ",".join(image_urls),
 
         # 用户信息
         "user_id": str(user_info.get("id")),
