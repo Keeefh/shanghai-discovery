@@ -192,23 +192,35 @@ Respond with ONLY valid JSON (no markdown):
 }
 
 // ─── HELPER: Download a video from a URL to a local file ──────────────────────
-function downloadVideo(url, outputPath) {
-  return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(outputPath)
-    const client = url.startsWith('https') ? https : http
+async function downloadVideo(url, outputPath, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(outputPath)
+        const client = url.startsWith('https') ? https : http
 
-    client.get(url, (res) => {
-      if (res.statusCode !== 200) {
-        reject(new Error(`Video download failed: HTTP ${res.statusCode}`))
-        return
+        client.get(url, (res) => {
+          if (res.statusCode !== 200) {
+            reject(new Error(`Video download failed: HTTP ${res.statusCode}`))
+            return
+          }
+          res.pipe(file)
+          file.on('finish', () => file.close(resolve))
+        }).on('error', (err) => {
+          fs.unlink(outputPath, () => {})
+          reject(new Error(`Video download error: ${err.message}`))
+        })
+      })
+      return // success
+    } catch (err) {
+      if (attempt < retries) {
+        console.warn(`  ⚠️  Download attempt ${attempt} failed (${err.message}) — retrying...`)
+        await new Promise(r => setTimeout(r, 2000 * attempt)) // 2s, 4s backoff
+      } else {
+        throw err // all retries exhausted
       }
-      res.pipe(file)
-      file.on('finish', () => file.close(resolve))
-    }).on('error', (err) => {
-      fs.unlink(outputPath, () => {})
-      reject(new Error(`Video download error: ${err.message}`))
-    })
-  })
+    }
+  }
 }
 
 // ─── HELPER: Get video duration in seconds via ffprobe ────────────────────────
