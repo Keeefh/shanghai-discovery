@@ -13,6 +13,7 @@
 //   post.author.name   → post.original_author  (flat, not nested)
 import { Play } from "lucide-react"
 import { ProgressiveImage } from "./ProgressiveImage"
+import { PlatformIcon } from "./PlatformIcon"
 
 export function VisualCard({ post, onClick }) {
   // "NEW" badge: post was added to our DB less than 24 hours ago
@@ -31,11 +32,13 @@ export function VisualCard({ post, onClick }) {
     >
       {/* Image area — only render if we actually have an image */}
       {coverImage && (
-        <div className="relative">
+        <div className="relative max-h-[280px] overflow-hidden md:max-h-none">
+          {/* naturalHeight: shows full image at its real aspect ratio (no crop) */}
           <ProgressiveImage
             src={coverImage}
             alt={post.Title || "Post image"}
-            className="aspect-[3/4] w-full"
+            className="w-full"
+            naturalHeight
           />
 
           {/* Video badge — shown when post_type is video or video_url exists */}
@@ -53,19 +56,10 @@ export function VisualCard({ post, onClick }) {
             </div>
           )}
 
-          {/* Platform / NEW badge (top-left) */}
-          {isNew ? (
+          {/* NEW badge (top-left) — only shown for posts under 24h */}
+          {isNew && (
             <div className="absolute left-2 top-2 rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-white">
               NEW
-            </div>
-          ) : (
-            // Show platform badge when not new: red for XHS, blue for Weibo
-            <div
-              className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-xs text-white ${
-                post.platform === "xiaohongshu" ? "bg-red-500" : "bg-blue-500"
-              }`}
-            >
-              {post.platform === "xiaohongshu" ? "XHS" : "Weibo"}
             </div>
           )}
         </div>
@@ -79,8 +73,9 @@ export function VisualCard({ post, onClick }) {
         </h3>
 
         <div className="mt-2 flex items-center justify-between">
-          {/* Author row: avatar + name */}
+          {/* Author row: platform icon + avatar + name */}
           <div className="flex items-center gap-1.5">
+            <PlatformIcon platform={post.platform} />
             {post.author_avatar ? (
               <img
                 src={post.author_avatar}

@@ -135,7 +135,7 @@ export function PostModal({ post, onClose }) {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="relative z-10 max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-2xl md:max-h-[85vh] md:max-w-lg md:rounded-2xl"
+        className="relative z-10 flex w-full flex-col overflow-y-auto rounded-t-2xl bg-white shadow-2xl max-h-[92vh] md:flex-row md:overflow-hidden md:rounded-2xl md:max-w-4xl md:max-h-[88vh]"
         style={{
           transform: `translateY(${translateY}px)`,
           transition: isDragging ? "none" : "transform 0.3s ease-out",
@@ -155,24 +155,39 @@ export function PostModal({ post, onClose }) {
           <X className="h-4 w-4" />
         </button>
 
-        {/* ── Media: video player OR image carousel ── */}
-        {isVideo && post.video_url ? (
-          // Video post: show native HTML5 video player with poster from first image
-          <video
-            src={post.video_url}
-            controls
-            poster={images[0]}
-            className="aspect-[4/3] w-full bg-stone-900 object-contain"
-          />
-        ) : images.length > 0 ? (
-          // Image post: carousel with prev/next arrows and dot indicators
-          <div className="relative">
-            <ProgressiveImage
-              src={images[currentImage]}
-              alt={post.Title || "Post image"}
-              className="aspect-[4/3] w-full"
-            />
+        {/* ── Media panel: left column on desktop, stacked on mobile ── */}
+        {(images.length > 0 || (isVideo && post.video_url)) && (
+          <div className="relative md:w-[55%] md:shrink-0 md:self-stretch md:bg-stone-900 md:flex md:items-center">
+            {isVideo && post.video_url ? (
+              <video
+                src={post.video_url}
+                controls
+                poster={images[0]}
+                className="w-full bg-stone-900 object-contain aspect-[4/3] md:aspect-auto md:h-full"
+              />
+            ) : (
+              <>
+                {/* Mobile: no side padding — image fills full width; title always visible below.
+                    max-h-[58vh] + 2vh drag handle + ~8vh title/author = ~68vh < 92vh modal. */}
+                <div className="relative md:hidden flex justify-center pb-2">
+                  <img
+                    src={images[currentImage]}
+                    alt={post.Title || "Post image"}
+                    className="max-h-[58vh] max-w-full object-contain rounded-lg"
+                  />
+                </div>
+                {/* Desktop: image contained in the fixed-height left panel */}
+                <div className="hidden md:flex md:h-full md:w-full md:items-center md:justify-center">
+                  <img
+                    src={images[currentImage]}
+                    alt={post.Title || "Post image"}
+                    className="max-h-full max-w-full object-contain"
+                  />
+                </div>
+              </>
+            )}
 
+            {/* Carousel controls — same on both layouts */}
             {images.length > 1 && (
               <>
                 <button
@@ -209,10 +224,10 @@ export function PostModal({ post, onClose }) {
               </>
             )}
           </div>
-        ) : null}
+        )}
 
-        {/* ── Text content ── */}
-        <div className="p-5">
+        {/* ── Text content panel: right column on desktop, below image on mobile ── */}
+        <div className="p-5 md:flex-1 md:overflow-y-auto md:p-6">
           {/* Title */}
           <h2 className="flex-1 text-lg font-bold leading-snug text-stone-900 text-balance">
             {post.Title}

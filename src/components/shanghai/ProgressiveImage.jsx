@@ -2,9 +2,13 @@
 //   interface ProgressiveImageProps { ... }        → deleted entirely
 //   ({ src, alt, className }: ProgressiveImageProps) → plain destructuring with default
 //   useRef<HTMLDivElement>(null)                    → useRef(null)
+//
+// naturalHeight prop: when true, image renders at its natural aspect ratio (no fixed
+// aspect container required). Used by VisualCard feed cards and PostModal for full image display.
+// Default false = original fixed-height mode (parent sets aspect ratio via className).
 import { useState, useRef, useEffect } from "react"
 
-export function ProgressiveImage({ src, alt, className = "" }) {
+export function ProgressiveImage({ src, alt, className = "", naturalHeight = false }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
@@ -38,6 +42,30 @@ export function ProgressiveImage({ src, alt, className = "" }) {
     )
   }
 
+  // Natural height mode: image defines its own height (no fixed aspect ratio container).
+  // Used for masonry-style feeds where each card shows the full image at its real ratio.
+  if (naturalHeight) {
+    return (
+      <div ref={containerRef} className={`relative overflow-hidden bg-stone-200 ${className}`}>
+        {/* Min-height placeholder holds space while image loads */}
+        {!loaded && <div className="min-h-[120px]" />}
+        {isVisible && (
+          <img
+            src={src}
+            alt={alt}
+            onLoad={() => setLoaded(true)}
+            onError={() => setError(true)}
+            className={`w-full h-auto block transition-opacity duration-500 ${
+              loaded ? "opacity-100" : "opacity-0"
+            }`}
+          />
+        )}
+      </div>
+    )
+  }
+
+  // Fixed-height mode: parent sets aspect ratio via className (e.g. aspect-[3/4]).
+  // Placeholder uses absolute inset-0 to fill the sized container.
   return (
     <div ref={containerRef} className={`relative overflow-hidden ${className}`}>
       {/* Gray placeholder shown until image loads — prevents layout shift */}

@@ -27,8 +27,40 @@ import { VisualCard } from "./VisualCard"
 import { TextCard } from "./TextCard"
 import { PostModal } from "./PostModal"
 import { LoadingDots } from "./LoadingDots"
+import { MOCK_POSTS } from "./mockPosts"
 
 const POSTS_PER_PAGE = 20
+
+// True for XHS posts that have images (shown as VisualCard in the 2-col masonry).
+// Weibo posts and imageless posts are always TextCard (full-width).
+function isVisualPost(p) {
+  return p.all_images?.length > 0 && p.platform !== 'weibo'
+}
+
+// Randomize post order but prevent runs of 4+ same-type cards.
+// Step 1: Fisher-Yates shuffle (different order each page load).
+// Step 2: single pass — if 4 consecutive same-type posts found, swap the 4th
+//         with the nearest opposite-type post ahead of it in the array.
+// This feels organic: no fixed pattern, but Weibo breaks appear at natural intervals.
+function shuffleAndFlow(posts) {
+  const arr = [...posts]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  const MAX_RUN = 3
+  for (let i = MAX_RUN; i < arr.length; i++) {
+    const type = isVisualPost(arr[i])
+    const allSame = arr.slice(i - MAX_RUN, i + 1).every(p => isVisualPost(p) === type)
+    if (allSame) {
+      const swapIdx = arr.findIndex((p, idx) => idx > i && isVisualPost(p) !== type)
+      if (swapIdx !== -1) {
+        ;[arr[i], arr[swapIdx]] = [arr[swapIdx], arr[i]]
+      }
+    }
+  }
+  return arr
+}
 
 export function Feed() {
   const [activeTab, setActiveTab] = useState("all")
@@ -86,11 +118,11 @@ export function Feed() {
         if (cancelled) return // component unmounted or tab changed again — discard
         if (error) throw error
 
-        const newPosts = data ?? []
+        const newPosts = shuffleAndFlow(data ?? [])
         setPosts(newPosts)
-        setOffset(newPosts.length)
+        setOffset((data ?? []).length)
         // If we got fewer rows than requested, there are no more pages
-        setHasMore(newPosts.length === POSTS_PER_PAGE)
+        setHasMore((data ?? []).length === POSTS_PER_PAGE)
       } catch (err) {
         console.error("[Feed] Error loading posts:", err)
       } finally {
@@ -125,11 +157,11 @@ export function Feed() {
       const { data, error } = await query
       if (error) throw error
 
-      const newPosts = data ?? []
-      // Append new posts — functional update ensures we always operate on latest state
-      setPosts((prev) => [...prev, ...newPosts])
-      setOffset((prev) => prev + newPosts.length)
-      setHasMore(newPosts.length === POSTS_PER_PAGE)
+      const incoming = data ?? []
+      // Re-shuffle the full combined list so new posts blend in naturally
+      setPosts((prev) => shuffleAndFlow([...prev, ...incoming]))
+      setOffset((prev) => prev + incoming.length)
+      setHasMore(incoming.length === POSTS_PER_PAGE)
     } catch (err) {
       console.error("[Feed] Error loading more posts:", err)
     } finally {
@@ -162,7 +194,10 @@ export function Feed() {
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  const noResults = !initialLoading && posts.length === 0
+  // Show mock posts as a UI preview when DB is empty (e.g. fresh reset).
+  // Once the pipeline fills the DB, real posts replace these automatically on refresh.
+  const displayPosts = posts.length > 0 ? posts : !initialLoading ? MOCK_POSTS : []
+
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -172,47 +207,44 @@ export function Feed() {
         {/* Full-screen loading spinner on first load */}
         {initialLoading && <LoadingDots className="min-h-[60vh]" />}
 
-        {/* Empty state — shown when a category has no posts */}
-        {noResults && (
-          <div className="flex min-h-[50vh] flex-col items-center justify-center text-center">
-            <p className="text-stone-500">
-              No {activeTab} posts yet.{" "}
-              <button
-                onClick={() => handleTabChange("all")}
-                className="font-medium text-stone-900 underline underline-offset-2"
-              >
-                Browse all posts
-              </button>
-            </p>
-          </div>
-        )}
+        {!initialLoading && displayPosts.length > 0 && (
+          <>
+            {/* ── Mobile: 2-col grid with dense auto-flow ──────────────────────
+                Dense auto-flow pulls visual cards forward to fill gaps left by
+                full-width Weibo cards — no blank columns. */}
+            <div
+              className="md:hidden grid grid-cols-2 gap-5"
+              style={{ gridAutoFlow: 'row dense' }}
+            >
+              {displayPosts.map((post) =>
+                isVisualPost(post) ? (
+                  <VisualCard key={post.id} post={post} onClick={() => setSelectedPost(post)} />
+                ) : (
+                  <div key={post.id} className="col-span-2">
+                    <TextCard post={post} onClick={() => setSelectedPost(post)} />
+                  </div>
+                )
+              )}
+            </div>
 
-        {/* Single CSS grid with dense auto-flow: the browser fills incomplete rows
-            by pulling visual posts forward across Weibo interruptions automatically.
-            Works on both mobile (2-col) and desktop (3-col) without JS column math.
-            Text posts span all columns; blank cells only possible on the last row. */}
-        {!initialLoading && posts.length > 0 && (
-          <div
-            className="grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-6 lg:gap-8"
-            style={{ gridAutoFlow: "row dense" }}
-          >
-            {posts.map((post) =>
-              post.all_images?.length > 0 && post.platform !== 'weibo' ? (
-                <VisualCard
-                  key={post.id}
-                  post={post}
-                  onClick={() => setSelectedPost(post)}
-                />
-              ) : (
-                <div key={post.id} className="col-span-full">
-                  <TextCard
-                    post={post}
-                    onClick={() => setSelectedPost(post)}
-                  />
-                </div>
-              )
-            )}
-          </div>
+            {/* ── Desktop: 3-col grid with dense auto-flow ─────────────────────
+                Same layout as main: visual posts fill individual cells, Weibo
+                TextCards span all 3 columns at full width. */}
+            <div
+              className="hidden md:grid md:grid-cols-3 md:gap-6 lg:gap-8"
+              style={{ gridAutoFlow: 'row dense' }}
+            >
+              {displayPosts.map((post) =>
+                isVisualPost(post) ? (
+                  <VisualCard key={post.id} post={post} onClick={() => setSelectedPost(post)} />
+                ) : (
+                  <div key={post.id} className="col-span-full">
+                    <TextCard post={post} onClick={() => setSelectedPost(post)} />
+                  </div>
+                )
+              )}
+            </div>
+          </>
         )}
 
         {/* Sentinel div — IntersectionObserver watches this to trigger loadMore.
