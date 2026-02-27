@@ -173,7 +173,7 @@ export function PostModal({ post, onClose }) {
                   <img
                     src={images[currentImage]}
                     alt={post.Title || "Post image"}
-                    className="max-h-[58vh] max-w-full object-contain rounded-lg"
+                    className="max-h-[72vh] max-w-full object-contain rounded-lg"
                   />
                 </div>
                 {/* Desktop: image contained in the fixed-height left panel */}
