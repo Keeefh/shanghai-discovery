@@ -105,10 +105,14 @@ Instead of:                          You see:
 
 *Pinterest-style visual posts + Twitter-style text updates*
 
+
+
 ### Post Detail with Translation
 <img width="1065" height="811" alt="image" src="https://github.com/user-attachments/assets/0485eafa-eccd-463e-9110-ee5f57791844" />
 
 *English translation + "For Foreigners" insider tips*
+
+
 
 ### Image Text Translation (Novel Feature)
 <img width="1064" height="825" alt="image" src="https://github.com/user-attachments/assets/4db6d7ef-6a10-41a7-bbea-a80660ad2ab1" />
