@@ -1,12 +1,13 @@
 # Shanghai Discovery
 
- > The only platform aggregating Shanghai's best local content (小红书, 微博, 抖音) with full English translation that discovers what  locals actually talk about, not tourist guides
+  The only platform aggregating Shanghai's best local content (小红书, 微博, 抖音) with full English translation that discovers what  locals actually talk about, not tourist guides
 
-[🌐 Live Demo](#) | [📊 Architecture](#) | [🎯 Roadmap](#)
+>                 ##Table Of Content
+[ Live Demo](#) | [Architecture](#) | [ Roadmap](#)
 
 ---
 
-## 🎯 The Problem
+##  The Problem
 
 **Shanghai's real culture lives on Chinese-only platforms.**
 
@@ -29,7 +30,7 @@
 
 **They never see what's actually trending in Shanghai TODAY.**
 
-## 💡 The Solution
+##  The Solution
 
 
 **Shanghai Discovery = All Chinese platforms, one English feed**
@@ -60,7 +61,7 @@ Instead of:                          You see:
 
 ---
 
-## 🎯 Our Focus
+##  Our Focus
 
 **Not another city guide. Not another travel app.**
 
@@ -97,18 +98,21 @@ Instead of:                          You see:
 
 ---
 
-## 📸 Screenshots
+##  Screenshots
 
 ### Discovery Feed
-![Feed](./docs/images/feed.png)
+<img width="1034" height="816" alt="image" src="https://github.com/user-attachments/assets/bb2f54e5-faa6-4bcc-aa93-5fb0cc4c25ee" />
+
 *Pinterest-style visual posts + Twitter-style text updates*
 
 ### Post Detail with Translation
-![Modal](./docs/images/modal.png)
+<img width="1065" height="811" alt="image" src="https://github.com/user-attachments/assets/0485eafa-eccd-463e-9110-ee5f57791844" />
+
 *English translation + "For Foreigners" insider tips*
 
 ### Image Text Translation (Novel Feature)
-![Image Translation](./docs/images/image-translation.png)
+<img width="1064" height="825" alt="image" src="https://github.com/user-attachments/assets/4db6d7ef-6a10-41a7-bbea-a80660ad2ab1" />
+
 *Before: Chinese text overlay → After: English (font preserved)*
 
 ---
@@ -143,19 +147,19 @@ Serve (React feed)
 
 ---
 
-## 🚀 Roadmap
+##  Roadmap
 
-### ✅ Tier 1: Translated Feed (DONE)
+###  Tier 1: Translated Feed (DONE)
 - Basic XHS scraping + translation
 - Simple feed display
 
-### ✅ Tier 2: Cross-Platform + Media (CURRENT)
+###  Tier 2: Cross-Platform + Media (CURRENT)
 - Weibo integration
 - Image text translation (novel feature)
 - Video dubbing
 - Responsive feed UI
 
-### 🔨 Tier 3: Smart + Legal (IN PROGRESS)
+###  Tier 3: Smart + Legal (IN PROGRESS)
 **Why:** Move from bulk scraping to user-driven, legally defensible model
 
 **Features:**
@@ -182,18 +186,18 @@ Serve (React feed)
    - Drive traffic back to originals
    - Build partnership pipeline
 
-### 🔮 Tier 4: Booking Integration
+###  Tier 4: Booking Integration
 - Direct reservations
 - Event tickets
 - Restaurant bookings
 
-### 🌍 Tier 5: Multi-City Expansion
+###  Tier 5: Multi-City Expansion
 - Beijing, Shenzhen, Chengdu
 - B2B platform for tourism agencies
 
 ---
 
-## 🎨 Novel Features
+##  Novel Features
 
 ### 1. Image Text Translation (First-of-its-kind)
 **Problem:** Chinese text overlays on images unreadable to foreigners
@@ -265,7 +269,7 @@ MIT
 
 ---
 
-## 🙏 Acknowledgments
+##  Acknowledgments
 
 Built with:
 - Anthropic Claude
