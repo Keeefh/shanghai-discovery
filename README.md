@@ -2,7 +2,7 @@
 
   The only platform aggregating Shanghai's best local content (小红书, 微博, 抖音) with full English translation that discovers what  locals actually talk about, not tourist guides
 
-[🌐 Live Demo](#https://github.com/) | [📊 Architecture](#architecture) | [🎯 Roadmap](#roadmap)
+[Live Demo](https://shanghai-discovery-podr0fcw2-keefelee51-bits-projects.vercel.app/)
 
 ---
 
