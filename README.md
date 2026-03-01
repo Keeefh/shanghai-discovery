@@ -2,7 +2,7 @@
 
   The only platform aggregating Shanghai's best local content (小红书, 微博, 抖音) with full English translation that discovers what  locals actually talk about, not tourist guides
 
->                 ##Table Of Content
+                 ##Table Of Content
 [ Live Demo](#) | [Architecture](#) | [ Roadmap](#)
 
 ---
